@@ -9,6 +9,7 @@ import torchvision.transforms as T
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
+import json
 import sys
 import os
 import cv2  # Added for video processing
@@ -18,36 +19,27 @@ import matplotlib.pyplot as plt
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 from engine.core import YAMLConfig
 
+label_map_global = {}  # Will be populated in main()
 
-label_map = {
-    1: 'person', 2: 'bicycle', 3: 'car', 4: 'motorbike', 5: 'aeroplane',
-    6: 'bus', 7: 'train', 8: 'truck', 9: 'boat', 10: 'trafficlight',
-    11: 'firehydrant', 12: 'streetsign', 13: 'stopsign', 14: 'parkingmeter',
-    15: 'bench', 16: 'bird', 17: 'cat', 18: 'dog', 19: 'horse',
-    20: 'sheep', 21: 'cow', 22: 'elephant', 23: 'bear', 24: 'zebra',
-    25: 'giraffe', 26: 'hat', 27: 'backpack', 28: 'umbrella', 29: 'shoe',
-    30: 'eyeglasses', 31: 'handbag', 32: 'tie', 33: 'suitcase', 34: 'frisbee',
-    35: 'skis', 36: 'snowboard', 37: 'sportsball', 38: 'kite', 39: 'baseballbat',
-    40: 'baseballglove', 41: 'skateboard', 42: 'surfboard', 43: 'tennisracket',
-    44: 'bottle', 45: 'plate', 46: 'wineglass', 47: 'cup', 48: 'fork',
-    49: 'knife', 50: 'spoon', 51: 'bowl', 52: 'banana', 53: 'apple',
-    54: 'sandwich', 55: 'orange', 56: 'broccoli', 57: 'carrot', 58: 'hotdog',
-    59: 'pizza', 60: 'donut', 61: 'cake', 62: 'chair', 63: 'sofa',
-    64: 'pottedplant', 65: 'bed', 66: 'mirror', 67: 'diningtable', 68: 'window',
-    69: 'desk', 70: 'toilet', 71: 'door', 72: 'tv', 73: 'laptop',
-    74: 'mouse', 75: 'remote', 76: 'keyboard', 77: 'cellphone', 78: 'microwave',
-    79: 'oven', 80: 'toaster', 81: 'sink', 82: 'refrigerator', 83: 'blender',
-    84: 'book', 85: 'clock', 86: 'vase', 87: 'scissors', 88: 'teddybear',
-    89: 'hairdrier', 90: 'toothbrush', 91: 'hairbrush'
-}
+
+def load_label_map(ann_file):
+    """Load class names from COCO-format annotation file"""
+    with open(ann_file, 'r') as f:
+        ann_data = json.load(f)
+    categories = ann_data['categories']
+    label_map = {}
+    for cat in categories:
+        label_map[cat['id']] = cat['name']
+    return label_map
+
 
 # 自动生成颜色（使用 matplotlib 的配色方案）
 COLORS = plt.cm.tab20.colors  # 使用 20 种独特颜色，适合 CVPR 论文
-COLOR_MAP = {label: tuple([int(c * 255) for c in COLORS[i % len(COLORS)]]) for i, label in enumerate(label_map)}
+COLOR_MAP = {}  # Will be populated after label_map is loaded
 
 
 # 绘制函数
-def draw(image, labels, boxes, scores, thrh=0.5):
+def draw(image, labels, boxes, scores, thrh=0.5, label_map=None):
     draw = ImageDraw.Draw(image)
     font = ImageFont.load_default()  # 可替换为更高质量的字体文件路径
     labels, boxes, scores = labels[scores > thrh], boxes[scores > thrh], scores[scores > thrh]
@@ -61,7 +53,8 @@ def draw(image, labels, boxes, scores, thrh=0.5):
         draw.rectangle(box, outline=color, width=3)
         
         # 添加标签和置信度
-        text = f"{label_map[category]} {scores[j].item():.2f}"
+        class_name = (label_map or label_map_global).get(category, f"class_{category}")
+        text = f"{class_name} {scores[j].item():.2f}"
         text_bbox = draw.textbbox((0, 0), text, font=font)  # 获取文本边界框
         text_width, text_height = text_bbox[2] - text_bbox[0], text_bbox[3] - text_bbox[1]
         # 添加文本背景
@@ -143,7 +136,7 @@ def process_video(model, file_path):
 
 def process_dataset(model, dataset_path, output_path, thrh=0.5):
     os.makedirs(output_path, exist_ok=True)
-    image_paths = [os.path.join(dataset_path, f) for f in os.listdir(dataset_path) if f.endswith(('.jpg', '.png'))]
+    image_paths = [os.path.join(dataset_path, f) for f in os.listdir(dataset_path) if f.endswith(('.jpg', '.jpeg', '.png'))]
     
     transforms = T.Compose([
         T.Resize((640, 640)),
@@ -203,6 +196,13 @@ def main(args):
             return outputs
 
     model = Model()
+    
+    # Load label map from annotation file
+    ann_file = cfg.yaml_cfg['train_dataloader']['dataset']['ann_file']
+    global label_map_global, COLOR_MAP
+    label_map_global = load_label_map(ann_file)
+    COLOR_MAP = {label: tuple([int(c * 255) for c in COLORS[i % len(COLORS)]]) for i, label in enumerate(label_map_global)}
+    
     process_dataset(model, args.dataset, args.output, thrh=0.5)
     # file_path = args.input
     # if os.path.splitext(file_path)[-1].lower() in ['.jpg', '.jpeg', '.png', '.bmp']:
