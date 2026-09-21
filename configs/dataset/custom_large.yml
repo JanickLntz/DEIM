@@ -1,0 +1,61 @@
+__include__: [
+  '../deim_dfine/deim_hgnetv2_n_coco.yml'
+]
+
+output_dir: ./deim_outputs/deim_hgnetv2_n_coco_large
+
+task: detection
+
+evaluator:
+  type: CocoEvaluator
+  iou_types: ['bbox', ]
+
+num_classes: 243  
+remap_mscoco_category: False
+
+train_dataloader:
+  type: DataLoader
+  dataset:
+    type: CocoDetection
+    img_folder: /home/janick/DEIM/dataset/src/large/coco_train
+    ann_file: /home/janick/DEIM/dataset/src/large/coco_train/instances_train.json
+    return_masks: False
+    transforms:
+      type: Compose
+      ops:
+        - {type: Resize, size: [640, 640]}
+        - {type: ConvertPILImage, dtype: 'float32', scale: True}
+        - {type: ConvertBoxes, fmt: 'cxcywh', normalize: True}
+      policy: ~
+  shuffle: True
+  num_workers: 4
+  drop_last: False
+  collate_fn:
+    type: BatchImageCollateFunction
+  total_batch_size: 8
+
+
+val_dataloader:
+  type: DataLoader
+  dataset:
+    type: CocoDetection
+    img_folder: /home/janick/DEIM/dataset/src/large/coco_val
+    ann_file: /home/janick/DEIM/dataset/src/large/coco_val/instances_val.json
+    return_masks: False
+    transforms:
+      type: Compose
+      ops:
+        - {type: Resize, size: [640, 640]}
+        - {type: ConvertPILImage, dtype: 'float32', scale: True}
+        - {type: ConvertBoxes, fmt: 'cxcywh', normalize: True}
+      policy: ~
+  shuffle: False
+  num_workers: 4
+  drop_last: False
+  collate_fn:
+    type: BatchImageCollateFunction
+  total_batch_size: 8
+
+HGNetv2:
+  pretrained: True
+  local_model_dir: '/home/janick/DEIM/weight/hgnetv2/'
