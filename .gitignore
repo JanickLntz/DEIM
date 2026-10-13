@@ -3,6 +3,7 @@
 inference_results*/
 /deim_outputs/
 /weight/
+.vscode/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
